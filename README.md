@@ -1,7 +1,7 @@
 # KidsMP3Player
 MP3 player for kids based on DFPlayer mini and ATTiny
 
-![Board](assets/14box_ad1.jpg)
+![Board](assets/14box_ad1.png)
 
 ## Features
 * Up to 32 GB audio playback (MP3, WAV, WMA) in 11 play lists
@@ -29,7 +29,7 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Use internal volume pot to set maximum volume of normal volume pot.
 
 ## Schematics
-![Board](assets/Schematics_PCB.png)
+![Schematics](assets/Schematics_PCB.png)
 
 ## Mini SD Card File Structure
 ```
@@ -63,3 +63,32 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 ```
 
 ## More Pictures
+![](assets/01prototype_setup.png)
+
+![](assets/02pcb_front.png)
+
+![](assets/03pcb_back.png)
+
+![](assets/04pcbkeys_front.png)
+
+![](assets/05pcbkeys_back.png)
+
+![](assets/06box01.png)
+
+![](assets/07box_front.png)
+
+![](assets/08box02.png)
+
+![](assets/09box_top.png)
+
+![](assets/10box_inside1.png)
+
+![](assets/11box_inside2.png)
+
+![](assets/12box_inside3.png)
+
+![](assets/13box_back.png)
+
+![](assets/14box_ad1.png)
+
+![](assets/15box_ad2.png)
