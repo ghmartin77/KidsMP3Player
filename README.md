@@ -1,7 +1,7 @@
 # KidsMP3Player
 MP3 player for kids based on DFPlayer mini and ATTiny
 
-![Board](assets/14box_ad1.png)
+![](assets/14box1.png)
 
 ## Features
 * Up to 32 GB audio playback (MP3, WAV, WMA) in 11 play lists
@@ -89,6 +89,6 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 
 ![](assets/13box_back.png)
 
-![](assets/14box_ad1.png)
+![](assets/14box1.png)
 
-![](assets/15box_ad2.png)
+![](assets/15box2.png)
