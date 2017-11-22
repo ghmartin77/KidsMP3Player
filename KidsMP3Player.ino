@@ -8,7 +8,7 @@
 #define BUTTON_TOLERANCE 25
 #define LONG_KEY_PRESS_TIME_MS 2000L
 #define VOLUME_CHECK_INTERVAL_MS 200L
-#define PLAY_DELAY_MS 250L
+#define PLAY_DELAY_MS 500L
 #define FADE_OUT_MS 3L * 1000L * 60L
 #define READ_RETRIES 3
 
@@ -283,7 +283,11 @@ void loop() {
   if (startTrackAtMs != 0 and nowMs >= startTrackAtMs) {
     startTrackAtMs = 0;
     player.playFolder(curFolder, curTrack);
-    delay(125);
+
+    // Don't reduce the following delay. Otherwise player might not have started playing
+    // the requested track, returning the file number of the previous file, thus breaking
+    // continuous play list playing which relies on correct curTrackFileNumber.
+    delay(500);
     curTrackFileNumber = readPlayerCurrentFileNumber(READ_RETRIES);
   }
 
@@ -292,7 +296,7 @@ void loop() {
     int value = player.read();
 
     if (type == DFPlayerPlayFinished && value == curTrackFileNumber) {
-      if (continuousPlayWithinPlaylist) {
+      if (startTrackAtMs == 0 /* no user request pending */ && continuousPlayWithinPlaylist) {
         playFolderOrNextInFolder(curFolder, loopPlaylist);
         // Don't reduce the following delay. Callbacks that a track has finished
         // might occur multiple times within 1 second and you don't want to move
@@ -304,4 +308,5 @@ void loop() {
 
   delay(50);
 }
+
 
