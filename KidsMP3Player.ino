@@ -7,6 +7,8 @@
 #define EEPROM_CFG 1
 #define BUTTON_TOLERANCE 25
 #define LONG_KEY_PRESS_TIME_MS 2000L
+#define VOLUME_CHECK_INTERVAL_MS 200L
+#define PLAY_DELAY_MS 250L
 #define FADE_OUT_MS 3L * 1000L * 60L
 #define READ_RETRIES 3
 
@@ -28,13 +30,20 @@ float volFade = 1.0;
 int vol = -1;
 int key = -1;
 unsigned long keyPressTimeMs = 0L;
+unsigned long volumeHandledLastMs = 0L;
+
 unsigned long sleepAtMs = 0L;
 unsigned long offAtMs = 0L;
 
+unsigned long nowMs;
+
 int curFolder = -1;
-int curFolderMaxTracks = -1;
 int curTrack = -1;
 int curTrackFileNumber = -1;
+
+unsigned long startTrackAtMs = 0L;
+
+int maxTracks[] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 void turnOff() {
   volFade = 0.0;
@@ -96,7 +105,7 @@ int readPlayerFileCountsInFolder(int folderNumber, int retries) {
 int readPlayerCurrentFileNumber(int retries) {
   int ret = -1;
   while (--retries >= 0 && ret == -1) {
-    ret = player.readCurrentFileNumber();
+    ret = player.readCurrentFileNumber(DFPLAYER_DEVICE_SD);
   }
   return ret;
 }
@@ -121,24 +130,24 @@ void playOrAdvertise(int fileNo) {
 }
 
 void playFolderOrNextInFolder(int folder, boolean loopPlayList = true) {
+  startTrackAtMs = 0;
+
   if (curFolder != folder) {
     curFolder = folder;
     curTrack = 1;
-    curFolderMaxTracks = readPlayerFileCountsInFolder(folder, READ_RETRIES);
   } else {
-    if (++curTrack > curFolderMaxTracks) {
+    if (++curTrack > maxTracks[folder - 1]) {
       curTrack = 1;
 
       if (!loopPlayList)
       {
-        curTrack = curFolderMaxTracks;
+        curTrack = maxTracks[folder - 1];
         return;
       }
     }
   }
-  player.playFolder(curFolder, curTrack);
-  delay(125);
-  curTrackFileNumber = readPlayerCurrentFileNumber(READ_RETRIES);
+
+  startTrackAtMs = millis() + PLAY_DELAY_MS;
 }
 
 void setup() {
@@ -157,31 +166,37 @@ void setup() {
   }
 
   initDFPlayer();
+
+  for (int i = 0; i < 11; ++i) {
+    maxTracks[i] = readPlayerFileCountsInFolder(i + 1, 3);
+  }
 }
 
-void loop() {
-  if (volFade <= 0.0) {
-    turnOff();
-  }
-
-  unsigned long nowMs = millis();
-
+inline void handleSleepTimer() {
   if (sleepAtMs != 0 && nowMs >= sleepAtMs) {
     volFade = 1.0 - (nowMs - sleepAtMs) / (float) (offAtMs - sleepAtMs);
     if (volFade <= 0.0) {
       turnOff();
     }
   }
+}
 
-  int volCurrent = analogRead(PIN_VOLUME);
-  int volInternal = analogRead(PIN_VOLUME_INTERNAL);
-  int volNew = (map(volCurrent, 0, 1023, 1,
-                    31 - map(volInternal, 1023, 0, 1, 30))) * volFade;
-  if (volNew != vol) {
-    vol = volNew;
-    player.volume(vol);
+inline void handleVolume() {
+  if (nowMs > volumeHandledLastMs + VOLUME_CHECK_INTERVAL_MS) {
+    volumeHandledLastMs = nowMs;
+
+    int volCurrent = analogRead(PIN_VOLUME);
+    int volInternal = analogRead(PIN_VOLUME_INTERNAL);
+    int volNew = (map(volCurrent, 0, 1023, 1,
+                      31 - map(volInternal, 1023, 0, 1, 30))) * volFade;
+    if (volNew != vol) {
+      vol = volNew;
+      player.volume(vol);
+    }
   }
+}
 
+inline void handleKeyPress() {
   int keyCurrent = analogRead(PIN_KEY);
 
   if (keyCurrent > 1000 && key > 0) {
@@ -256,6 +271,21 @@ void loop() {
       keyPressTimeMs = nowMs;
     }
   }
+}
+
+void loop() {
+  nowMs = millis();
+
+  handleSleepTimer();
+  handleVolume();
+  handleKeyPress();
+
+  if (startTrackAtMs != 0 and nowMs >= startTrackAtMs) {
+    startTrackAtMs = 0;
+    player.playFolder(curFolder, curTrack);
+    delay(125);
+    curTrackFileNumber = readPlayerCurrentFileNumber(READ_RETRIES);
+  }
 
   if (player.available()) {
     uint8_t type = player.readType();
@@ -263,12 +293,15 @@ void loop() {
 
     if (type == DFPlayerPlayFinished && value == curTrackFileNumber) {
       if (continuousPlayWithinPlaylist) {
-        delay(1000);
         playFolderOrNextInFolder(curFolder, loopPlaylist);
+        // Don't reduce the following delay. Callbacks that a track has finished
+        // might occur multiple times within 1 second and you don't want to move
+        // on more than exactly one track.
+        delay(1000);
       }
     }
   }
 
-  delay(125);
+  delay(50);
 }
 
