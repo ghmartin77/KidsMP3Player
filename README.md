@@ -27,14 +27,14 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Hold down button 2 for more than 2 secs to toggle between "Playlist loop ON/OFF" (only applicable if "Continuous Play" is ON) 
 * Hold down button 11 for more than 2 secs to activate Sleep Timer. Afterwards push button 1 to 11 to choose between OFF and 5 to 50 minutes sleep timer. Device will fade out volume after sleep timer has run out. When device has gone to sleep you need to switch it off and on again to continue playing.
 * Use internal volume pot to set maximum volume of normal volume pot.
-* [User Manual](assets/Manual%20German.pdf)
+* [User Manual German](assets/Manual%20German.pdf)
 
 ## Schematics
 ![Schematics](assets/Schematics_PCB.png)
 
 ## Mini SD Card File Structure
 ```
-/01 - Playlist Button 1]
+/01 - Playlist Button 1
    001.mp3 - First track in playlist 1
    002.mp3
 /02
@@ -93,3 +93,6 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 ![](assets/14box1.png)
 
 ![](assets/15box2.png)
+
+## Alternatives
+If you're looking for a technically very similar player with RFID support, please have a look [here](https://github.com/xfjx/TonUINO). 
