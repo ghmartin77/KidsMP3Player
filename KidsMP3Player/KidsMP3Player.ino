@@ -161,9 +161,7 @@ void setup() {
 
   softSerial.begin(9600);
 
-  while (!player.begin(softSerial)) {
-    delay(200);
-  }
+  player.begin(softSerial, false, false); // disable ACK to work with MH2024K-24SS chips
 
   initDFPlayer();
 
