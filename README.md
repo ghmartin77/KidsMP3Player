@@ -23,8 +23,9 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 
 ## Usage Instructions
 * Push playlist button 1-11 to start playing the corresponding playlist. Push button again to move on to the next track within that playlist.
-* Hold down button 1 for more than 2 secs to toggle between "Continuous Play ON/OFF"
-* Hold down button 2 for more than 2 secs to toggle between "Playlist loop ON/OFF" (only applicable if "Continuous Play" is ON) 
+* Hold down button 1 for more than 2 secs to toggle between "Continuous Play ON/OFF".
+* Hold down button 2 for more than 2 secs to toggle between "Playlist loop ON/OFF" (only applicable if "Continuous Play" is ON). 
+* Hold down button 3 for more than 2 secs to toggle between "Restart last active track on startup ON/OFF". 
 * Hold down button 11 for more than 2 secs to activate Sleep Timer. Afterwards push button 1 to 11 to choose between OFF and 5 to 50 minutes sleep timer. Device will fade out volume after sleep timer has run out. When device has gone to sleep you need to switch it off and on again to continue playing.
 * Use internal volume pot to set maximum volume of normal volume pot.
 * [User Manual German](assets/Manual%20German.pdf)
@@ -59,6 +60,8 @@ MP3 player for kids based on DFPlayer mini and ATTiny
     0201.mp3 - Audio file "Continuous Play OFF"
     0300.mp3 - Audio file "Playlist Loop ON"
     0301.mp3 - Audio file "Playlist Loop OFF"
+    0400.mp3 - Audio file "Restart last active track on startup ON"
+    0401.mp3 - Audio file "Restart last active track on startup OFF"
 /MP3
     [Copy same content as in /ADVERT here]
 ```

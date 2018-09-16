@@ -5,6 +5,9 @@
 #include <avr/eeprom.h>
 
 #define EEPROM_CFG 1
+#define EEPROM_FOLDER 2
+#define EEPROM_TRACK 4
+
 #define BUTTON_TOLERANCE 25
 #define LONG_KEY_PRESS_TIME_MS 2000L
 #define VOLUME_CHECK_INTERVAL_MS 200L
@@ -16,7 +19,9 @@
 #define PIN_VOLUME A2
 #define PIN_VOLUME_INTERNAL A1
 
-SoftwareSerial softSerial(0, 1); // RX, TX 0,1
+#define NO_FOLDERS 11
+
+SoftwareSerial softSerial(0, 1); // RX, TX
 DFRobotDFPlayerMini player;
 
 enum {
@@ -25,6 +30,7 @@ enum {
 
 boolean loopPlaylist = false;
 boolean continuousPlayWithinPlaylist = false;
+boolean restartLastTrackOnStart = false;
 
 float volFade = 1.0;
 int vol = -1;
@@ -37,13 +43,13 @@ unsigned long offAtMs = 0L;
 
 unsigned long nowMs;
 
-int curFolder = -1;
-int curTrack = -1;
-int curTrackFileNumber = -1;
+int16_t curFolder = -1;
+int16_t curTrack = -1;
+int16_t curTrackFileNumber = -1;
 
 unsigned long startTrackAtMs = 0L;
 
-int maxTracks[] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+int maxTracks[NO_FOLDERS];
 
 void turnOff() {
   volFade = 0.0;
@@ -82,8 +88,41 @@ void initDFPlayer(boolean reset = false) {
 
 void readConfig() {
   uint8_t cfg = eeprom_read_byte((uint8_t*) EEPROM_CFG);
+
   loopPlaylist = cfg & 1;
   continuousPlayWithinPlaylist = cfg & 2;
+  restartLastTrackOnStart = cfg & 4;
+}
+
+void writeConfig() {
+  uint8_t cfg = eeprom_read_byte((uint8_t*) EEPROM_CFG);
+
+  cfg = (cfg & (0xff ^ 1)) | (loopPlaylist ? 1 : 0);
+  cfg = (cfg & (0xff ^ 2)) | (continuousPlayWithinPlaylist ? 2 : 0);
+  cfg = (cfg & (0xff ^ 4)) | (restartLastTrackOnStart ? 4 : 0);
+
+  eeprom_update_byte((uint8_t*) EEPROM_CFG, cfg);
+}
+
+void readTrackInfo() {
+  curFolder = (int16_t) eeprom_read_word((uint16_t*) EEPROM_FOLDER);
+  if (curFolder < 0 || curFolder > NO_FOLDERS) {
+    curFolder = -1;
+    curTrack = -1;
+
+    return;
+  }
+
+  curTrack = (int16_t) eeprom_read_word((uint16_t*) EEPROM_TRACK);
+  if (curTrack < 0 || curTrack > maxTracks[curFolder - 1]) {
+    curTrack = -1;
+    curFolder = -1;
+  }
+}
+
+void writeTrackInfo(int16_t folder, int16_t track) {
+  eeprom_update_word((uint16_t*) EEPROM_FOLDER, (uint16_t) folder);
+  eeprom_update_word((uint16_t*) EEPROM_TRACK, (uint16_t) track);
 }
 
 int readPlayerState(int retries) {
@@ -110,14 +149,6 @@ int readPlayerCurrentFileNumber(int retries) {
   return ret;
 }
 
-void writeConfig() {
-  uint8_t cfg = eeprom_read_byte((uint8_t*) EEPROM_CFG);
-  cfg = (cfg & (0xff ^ 1)) | (loopPlaylist ? 1 : 0);
-  cfg = (cfg & (0xff ^ 2)) | (continuousPlayWithinPlaylist ? 2 : 0);
-
-  eeprom_update_byte((uint8_t*) EEPROM_CFG, cfg);
-}
-
 void playOrAdvertise(int fileNo) {
   int state = readPlayerState(READ_RETRIES);
   if (state >= 0) {
@@ -129,7 +160,7 @@ void playOrAdvertise(int fileNo) {
   }
 }
 
-void playFolderOrNextInFolder(int folder, boolean loopPlayList = true) {
+void playFolderOrNextInFolder(int folder, boolean loop = true) {
   startTrackAtMs = 0;
 
   if (curFolder != folder) {
@@ -139,7 +170,7 @@ void playFolderOrNextInFolder(int folder, boolean loopPlayList = true) {
     if (++curTrack > maxTracks[folder - 1]) {
       curTrack = 1;
 
-      if (!loopPlayList)
+      if (!loop)
       {
         curTrack = maxTracks[folder - 1];
         return;
@@ -165,8 +196,15 @@ void setup() {
 
   initDFPlayer();
 
-  for (int i = 0; i < 11; ++i) {
-    maxTracks[i] = readPlayerFileCountsInFolder(i + 1, 3);
+  for (int i = 0; i < NO_FOLDERS; ++i) {
+    maxTracks[i] = readPlayerFileCountsInFolder(i + 1, READ_RETRIES);
+  }
+
+  if (restartLastTrackOnStart) {
+    readTrackInfo();
+    if (curFolder != -1 && curTrack != -1) {
+      startTrackAtMs = millis() + PLAY_DELAY_MS;
+    }
   }
 }
 
@@ -213,6 +251,12 @@ inline void handleKeyPress() {
           loopPlaylist = !loopPlaylist;
           playOrAdvertise(loopPlaylist ? 300 : 301);
           writeConfig();
+          delay(1000);
+        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 3) {
+          restartLastTrackOnStart = !restartLastTrackOnStart;
+          playOrAdvertise(restartLastTrackOnStart ? 400 : 401);
+          writeConfig();
+          writeTrackInfo(curFolder, curTrack);
           delay(1000);
         } else {
           playFolderOrNextInFolder(key);
@@ -281,6 +325,9 @@ void loop() {
   if (startTrackAtMs != 0 and nowMs >= startTrackAtMs) {
     startTrackAtMs = 0;
     player.playFolder(curFolder, curTrack);
+    if (restartLastTrackOnStart) {
+      writeTrackInfo(curFolder, curTrack);
+    }
 
     // Don't reduce the following delay. Otherwise player might not have started playing
     // the requested track, returning the file number of the previous file, thus breaking
@@ -294,12 +341,19 @@ void loop() {
     int value = player.read();
 
     if (type == DFPlayerPlayFinished && value == curTrackFileNumber) {
+      int16_t oldTrack = curTrack;
+
       if (startTrackAtMs == 0 /* no user request pending */ && continuousPlayWithinPlaylist) {
         playFolderOrNextInFolder(curFolder, loopPlaylist);
+
         // Don't reduce the following delay. Callbacks that a track has finished
         // might occur multiple times within 1 second and you don't want to move
         // on more than exactly one track.
         delay(1000);
+      }
+
+      if (oldTrack == curTrack) {
+        writeTrackInfo(-1, -1);
       }
     }
   }
