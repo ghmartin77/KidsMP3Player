@@ -16,7 +16,7 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Wooden handle (hardware store)
 * Visaton 8006 Speaker
 * Mini DFPlayer
-* ATTiny85 (**ATTENTION!!!** Ensure your fuses are set to 8Mhz (internal) clock!)
+* ATTiny85 (**ATTENTION!!!** Ensure your fuses are set to 8Mhz (internal) clock! Otherwise SoftSerial won't work reliably.)
 * 2200mAh Powerbank
 * Göldo Dome Chrome (KB02C)
 * Skrews, nuts, washers, resistors, pots, switch, hot glue...
