@@ -31,6 +31,9 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Use internal volume pot to set maximum volume of normal volume pot.
 * [User Manual German](assets/Manual%20German.pdf)
 
+## Builds based on this plus discussions
+* [mikrocontroller.net](https://www.mikrocontroller.net/topic/439485) (German)
+
 ## Schematics
 ![Schematics](assets/Schematics_PCB.png)
 
