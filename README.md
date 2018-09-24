@@ -8,7 +8,7 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * 50+h continuous playback (medium volume)
 * Sleep timer (5 - 50 minutes) with fade out
 * Parental maximum volume control
-* Configurable: Continuous play ON/OFF, play list loop ON/OFF
+* Configurable: Continuous play ON/OFF, play list loop ON/OFF, automatic restart of last active track on startup ON/OFF
 
 ## Build Ingredients
 * IKEA Bamboo box DRAGAN as body
@@ -16,10 +16,11 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Wooden handle (hardware store)
 * Visaton 8006 Speaker
 * Mini DFPlayer
-* ATTiny85
+* ATTiny85 (**ATTENTION!!!** Ensure your fuses are set to 8Mhz (internal) clock! Otherwise SoftSerial won't work reliably. The following fuse values are recommended: L:0xE2, H:0xD7, E:0xFF)
 * 2200mAh Powerbank
 * Göldo Dome Chrome (KB02C)
 * Skrews, nuts, washers, resistors, pots, switch, hot glue...
+* Libraries: SoftSerial, [DFRobotDFPlayerMini](https://github.com/DFRobot/DFRobotDFPlayerMini) (1.0.3 - 1.0.5 are proven to work)
 
 ## Usage Instructions
 * Push playlist button 1-11 to start playing the corresponding playlist. Push button again to move on to the next track within that playlist.
@@ -29,6 +30,9 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Hold down button 11 for more than 2 secs to activate Sleep Timer. Afterwards push button 1 to 11 to choose between OFF and 5 to 50 minutes sleep timer. Device will fade out volume after sleep timer has run out. When device has gone to sleep you need to switch it off and on again to continue playing.
 * Use internal volume pot to set maximum volume of normal volume pot.
 * [User Manual German](assets/Manual%20German.pdf)
+
+## Builds based on this plus discussions
+* [mikrocontroller.net](https://www.mikrocontroller.net/topic/439485) (German)
 
 ## Schematics
 ![Schematics](assets/Schematics_PCB.png)
