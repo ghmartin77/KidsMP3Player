@@ -235,7 +235,7 @@ inline void handleVolume() {
 inline void handleKeyPress() {
   int keyCurrent = analogRead(PIN_KEY);
 
-  if (keyCurrent > 1000 && key > 0) {
+  if (keyCurrent > 958 && key > 0) {
     switch (mode) {
       case MODE_NORMAL:
         if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 11) {
@@ -282,28 +282,28 @@ inline void handleKeyPress() {
     }
 
     key = -1;
-  } else if (keyCurrent <= 1000) {
+  } else if (keyCurrent <= 958) {
     int keyOld = key;
 
-    if (keyCurrent > 949 - BUTTON_TOLERANCE) {
+    if (keyCurrent > 933 - BUTTON_TOLERANCE) {
       key = 11;
-    } else if (keyCurrent > 894 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 846 - BUTTON_TOLERANCE) {
       key = 9;
-    } else if (keyCurrent > 847 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 760 - BUTTON_TOLERANCE) {
       key = 6;
-    } else if (keyCurrent > 801 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 676 - BUTTON_TOLERANCE) {
       key = 3;
-    } else if (keyCurrent > 754 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 590 - BUTTON_TOLERANCE) {
       key = 2;
-    } else if (keyCurrent > 701 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 504 - BUTTON_TOLERANCE) {
       key = 5;
-    } else if (keyCurrent > 635 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 414 - BUTTON_TOLERANCE) {
       key = 8;
-    } else if (keyCurrent > 553 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 321 - BUTTON_TOLERANCE) {
       key = 10;
-    } else if (keyCurrent > 444 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 222 - BUTTON_TOLERANCE) {
       key = 7;
-    } else if (keyCurrent > 286 - BUTTON_TOLERANCE) {
+    } else if (keyCurrent > 115 - BUTTON_TOLERANCE) {
       key = 4;
     } else if (keyCurrent > 0) {
       key = 1;
