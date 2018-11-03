@@ -145,6 +145,13 @@ int readPlayerCurrentFileNumber(int retries) {
   int ret = -1;
   while (--retries >= 0 && ret == -1) {
     ret = player.readCurrentFileNumber(DFPLAYER_DEVICE_SD);
+
+    if (ret == -1) {
+      if (softSerial.overflow()) {
+        softSerial.flush();
+      }
+      delay(250);
+    }
   }
   return ret;
 }
@@ -350,6 +357,12 @@ void loop() {
         // might occur multiple times within 1 second and you don't want to move
         // on more than exactly one track.
         delay(1000);
+        if (softSerial.overflow()) {
+          softSerial.flush();
+        }
+        while (player.available()) {
+          player.read();
+        }
       }
 
       if (oldTrack == curTrack) {
@@ -360,5 +373,6 @@ void loop() {
 
   delay(50);
 }
+
 
 
