@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
-#include <DFRobotDFPlayerMini.h>
 #include <avr/sleep.h>
 #include <avr/eeprom.h>
+#include "DFMiniMp3.h"
 
 #define EEPROM_CFG 1
 #define EEPROM_FOLDER 2
@@ -13,7 +13,6 @@
 #define VOLUME_CHECK_INTERVAL_MS 200L
 #define PLAY_DELAY_MS 500L
 #define FADE_OUT_MS 3L * 1000L * 60L
-#define READ_RETRIES 3
 
 #define PIN_KEY A3
 #define PIN_VOLUME A2
@@ -21,8 +20,10 @@
 
 #define NO_FOLDERS 11
 
+void playFolderOrNextInFolder(int folder, boolean loop);
+void writeTrackInfo(int16_t folder, int16_t track);
+
 SoftwareSerial softSerial(0, 1); // RX, TX
-DFRobotDFPlayerMini player;
 
 enum {
   MODE_NORMAL, MODE_SET_TIMER
@@ -45,19 +46,52 @@ unsigned long nowMs;
 
 int16_t curFolder = -1;
 int16_t curTrack = -1;
-int16_t curTrackFileNumber = -1;
+
+int16_t expectedGlobalTrackToFinish = -1;
 
 unsigned long startTrackAtMs = 0L;
 
 int maxTracks[NO_FOLDERS];
 
+class Mp3Notify
+{
+  public:
+    static void OnError(uint16_t errorCode) {
+    }
+
+    static void OnPlayFinished(uint16_t globalTrack) {
+      if (expectedGlobalTrackToFinish == globalTrack) {
+        expectedGlobalTrackToFinish = -1;
+
+        if (continuousPlayWithinPlaylist && startTrackAtMs == 0 /* no user request pending */) {
+          playFolderOrNextInFolder(curFolder, loopPlaylist);
+        }
+
+        if (restartLastTrackOnStart && (curTrack == -1 || !continuousPlayWithinPlaylist)) {
+          writeTrackInfo(-1, -1);
+        }
+      }
+    }
+
+    static void OnCardOnline(uint16_t code) {
+    }
+
+    static void OnCardInserted(uint16_t code) {
+    }
+
+    static void OnCardRemoved(uint16_t code) {
+    }
+};
+
+DFMiniMp3<SoftwareSerial, Mp3Notify> player(softSerial);
+
 void turnOff() {
   volFade = 0.0;
-  player.volume(0);
+  player.setVolume(0);
   delay(50);
   player.stop();
   delay(50);
-  player.outputDevice(DFPLAYER_DEVICE_SLEEP);
+  player.setPlaybackSource(DfMp3_PlaySource_Sleep);
   delay(50);
   player.disableDAC();
   delay(50);
@@ -72,17 +106,10 @@ void turnOff() {
 }
 
 void initDFPlayer(boolean reset = false) {
-  if (reset) {
-    player.setTimeOut(6000);
-    player.reset();
-    player.waitAvailable();
-  }
-  player.setTimeOut(1000);
-
   delay(50);
 
-  player.EQ(DFPLAYER_EQ_NORMAL);
-  player.outputDevice(DFPLAYER_DEVICE_SD);
+  player.setEq(DfMp3_Eq_Normal);
+  player.setPlaybackSource(DfMp3_PlaySource_Sd);
   player.enableDAC();
 }
 
@@ -106,7 +133,7 @@ void writeConfig() {
 
 void readTrackInfo() {
   curFolder = (int16_t) eeprom_read_word((uint16_t*) EEPROM_FOLDER);
-  if (curFolder < 0 || curFolder > NO_FOLDERS) {
+  if (curFolder < 1 || curFolder > NO_FOLDERS) {
     curFolder = -1;
     curTrack = -1;
 
@@ -114,7 +141,7 @@ void readTrackInfo() {
   }
 
   curTrack = (int16_t) eeprom_read_word((uint16_t*) EEPROM_TRACK);
-  if (curTrack < 0 || curTrack > maxTracks[curFolder - 1]) {
+  if (curTrack < 1 || curTrack > maxTracks[curFolder - 1]) {
     curTrack = -1;
     curFolder = -1;
   }
@@ -125,45 +152,12 @@ void writeTrackInfo(int16_t folder, int16_t track) {
   eeprom_update_word((uint16_t*) EEPROM_TRACK, (uint16_t) track);
 }
 
-int readPlayerState(int retries) {
-  int ret = -1;
-  while (--retries >= 0 && ret == -1) {
-    ret = player.readState();
-  }
-  return ret;
-}
-
-int readPlayerFileCountsInFolder(int folderNumber, int retries) {
-  int ret = -1;
-  while (--retries >= 0 && ret == -1) {
-    ret = player.readFileCountsInFolder(folderNumber);
-  }
-  return ret;
-}
-
-int readPlayerCurrentFileNumber(int retries) {
-  int ret = -1;
-  while (--retries >= 0 && ret == -1) {
-    ret = player.readCurrentFileNumber(DFPLAYER_DEVICE_SD);
-
-    if (ret == -1) {
-      if (softSerial.overflow()) {
-        softSerial.flush();
-      }
-      delay(250);
-    }
-  }
-  return ret;
-}
-
 void playOrAdvertise(int fileNo) {
-  int state = readPlayerState(READ_RETRIES);
-  if (state >= 0) {
-    if ((state & 1) == 1) {
-      player.advertise(fileNo);
-    } else {
-      player.playMp3Folder(fileNo);
-    }
+  int state = player.getStatus();
+  if ((state & 1) == 1) {
+    player.playAdvertisement(fileNo);
+  } else {
+    player.playMp3FolderTrack(fileNo);
   }
 }
 
@@ -174,14 +168,17 @@ void playFolderOrNextInFolder(int folder, boolean loop = true) {
     curFolder = folder;
     curTrack = 1;
   } else {
-    if (++curTrack > maxTracks[folder - 1]) {
+    if (curTrack == -1) {
       curTrack = 1;
-
+    }
+    else if (++curTrack > maxTracks[folder - 1]) {
       if (!loop)
       {
-        curTrack = maxTracks[folder - 1];
+        curTrack = -1;
         return;
       }
+
+      curTrack = 1;
     }
   }
 
@@ -197,14 +194,12 @@ void setup() {
 
   delay(50);
 
-  softSerial.begin(9600);
-
-  player.begin(softSerial, false, false); // disable ACK to work with MH2024K-24SS chips
+  player.begin();
 
   initDFPlayer();
 
   for (int i = 0; i < NO_FOLDERS; ++i) {
-    maxTracks[i] = readPlayerFileCountsInFolder(i + 1, READ_RETRIES);
+    maxTracks[i] = player.getFolderTrackCount(i + 1);
   }
 
   if (restartLastTrackOnStart) {
@@ -234,7 +229,7 @@ inline void handleVolume() {
                       31 - map(volInternal, 1023, 0, 1, 30))) * volFade;
     if (volNew != vol) {
       vol = volNew;
-      player.volume(vol);
+      player.setVolume(vol);
     }
   }
 }
@@ -263,7 +258,7 @@ inline void handleKeyPress() {
           restartLastTrackOnStart = !restartLastTrackOnStart;
           playOrAdvertise(restartLastTrackOnStart ? 400 : 401);
           writeConfig();
-          writeTrackInfo(curFolder, curTrack);
+          writeTrackInfo(restartLastTrackOnStart ? curFolder : -1, restartLastTrackOnStart ? curTrack : -1);
           delay(1000);
         } else {
           playFolderOrNextInFolder(key);
@@ -331,7 +326,7 @@ void loop() {
 
   if (startTrackAtMs != 0 and nowMs >= startTrackAtMs) {
     startTrackAtMs = 0;
-    player.playFolder(curFolder, curTrack);
+    player.playFolderTrack(curFolder, curTrack);
     if (restartLastTrackOnStart) {
       writeTrackInfo(curFolder, curTrack);
     }
@@ -340,35 +335,13 @@ void loop() {
     // the requested track, returning the file number of the previous file, thus breaking
     // continuous play list playing which relies on correct curTrackFileNumber.
     delay(500);
-    curTrackFileNumber = readPlayerCurrentFileNumber(READ_RETRIES);
+    expectedGlobalTrackToFinish = player.getCurrentTrack();
   }
 
-  if (player.available()) {
-    uint8_t type = player.readType();
-    int value = player.read();
+  player.loop();
 
-    if (type == DFPlayerPlayFinished && value == curTrackFileNumber) {
-      int16_t oldTrack = curTrack;
-
-      if (startTrackAtMs == 0 /* no user request pending */ && continuousPlayWithinPlaylist) {
-        playFolderOrNextInFolder(curFolder, loopPlaylist);
-
-        // Don't reduce the following delay. Callbacks that a track has finished
-        // might occur multiple times within 1 second and you don't want to move
-        // on more than exactly one track.
-        delay(1000);
-        if (softSerial.overflow()) {
-          softSerial.flush();
-        }
-        while (player.available()) {
-          player.read();
-        }
-      }
-
-      if (oldTrack == curTrack) {
-        writeTrackInfo(-1, -1);
-      }
-    }
+  if (softSerial.overflow()) {
+    softSerial.flush();
   }
 
   delay(50);
