@@ -45,7 +45,7 @@ unsigned long nowMs;
 
 int16_t curFolder = -1;
 int16_t curTrack = -1;
-int16_t curTrackFileNumber = -1;
+int16_t expectedGlobalTrackToFinish = -1;
 
 unsigned long startTrackAtMs = 0L;
 
@@ -106,7 +106,7 @@ void writeConfig() {
 
 void readTrackInfo() {
   curFolder = (int16_t) eeprom_read_word((uint16_t*) EEPROM_FOLDER);
-  if (curFolder < 0 || curFolder > NO_FOLDERS) {
+  if (curFolder < 1 || curFolder > NO_FOLDERS) {
     curFolder = -1;
     curTrack = -1;
 
@@ -114,7 +114,7 @@ void readTrackInfo() {
   }
 
   curTrack = (int16_t) eeprom_read_word((uint16_t*) EEPROM_TRACK);
-  if (curTrack < 0 || curTrack > maxTracks[curFolder - 1]) {
+  if (curTrack < 1 || curTrack > maxTracks[curFolder - 1]) {
     curTrack = -1;
     curFolder = -1;
   }
@@ -174,14 +174,17 @@ void playFolderOrNextInFolder(int folder, boolean loop = true) {
     curFolder = folder;
     curTrack = 1;
   } else {
-    if (++curTrack > maxTracks[folder - 1]) {
+    if (curTrack == -1) {
       curTrack = 1;
-
+    }
+    else if (++curTrack > maxTracks[folder - 1]) {
       if (!loop)
       {
-        curTrack = maxTracks[folder - 1];
+        curTrack = -1;
         return;
       }
+
+      curTrack = 1;
     }
   }
 
@@ -263,7 +266,7 @@ inline void handleKeyPress() {
           restartLastTrackOnStart = !restartLastTrackOnStart;
           playOrAdvertise(restartLastTrackOnStart ? 400 : 401);
           writeConfig();
-          writeTrackInfo(curFolder, curTrack);
+          writeTrackInfo(restartLastTrackOnStart ? curFolder : -1, restartLastTrackOnStart ? curTrack : -1);
           delay(1000);
         } else {
           playFolderOrNextInFolder(key);
@@ -340,17 +343,17 @@ void loop() {
     // the requested track, returning the file number of the previous file, thus breaking
     // continuous play list playing which relies on correct curTrackFileNumber.
     delay(500);
-    curTrackFileNumber = readPlayerCurrentFileNumber(READ_RETRIES);
+    expectedGlobalTrackToFinish = readPlayerCurrentFileNumber(READ_RETRIES);
   }
 
   if (player.available()) {
     uint8_t type = player.readType();
     int value = player.read();
 
-    if (type == DFPlayerPlayFinished && value == curTrackFileNumber) {
-      int16_t oldTrack = curTrack;
+    if (type == DFPlayerPlayFinished && value == expectedGlobalTrackToFinish) {
+      expectedGlobalTrackToFinish = -1;
 
-      if (startTrackAtMs == 0 /* no user request pending */ && continuousPlayWithinPlaylist) {
+      if (continuousPlayWithinPlaylist && startTrackAtMs == 0 /* no user request pending */) {
         playFolderOrNextInFolder(curFolder, loopPlaylist);
 
         // Don't reduce the following delay. Callbacks that a track has finished
@@ -365,7 +368,7 @@ void loop() {
         }
       }
 
-      if (oldTrack == curTrack) {
+      if (restartLastTrackOnStart && (curTrack == -1 || !continuousPlayWithinPlaylist)) {
         writeTrackInfo(-1, -1);
       }
     }
