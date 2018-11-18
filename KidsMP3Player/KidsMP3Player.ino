@@ -106,11 +106,13 @@ void turnOff() {
 }
 
 void initDFPlayer(boolean reset = false) {
-  delay(50);
-
+  delay(100);
   player.setEq(DfMp3_Eq_Normal);
+  delay(100);
   player.setPlaybackSource(DfMp3_PlaySource_Sd);
+  delay(250);
   player.enableDAC();
+  delay(250);
 }
 
 void readConfig() {
@@ -200,6 +202,7 @@ void setup() {
 
   for (int i = 0; i < NO_FOLDERS; ++i) {
     maxTracks[i] = player.getFolderTrackCount(i + 1);
+    if (maxTracks[i] == -1) i--;
   }
 
   if (restartLastTrackOnStart) {

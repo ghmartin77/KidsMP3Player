@@ -135,7 +135,7 @@ public:
         sendPacket(0x02);
     }
 
-    uint16_t getCurrentTrack()
+    int16_t getCurrentTrack()
     {
         sendPacket(0x4c);
         return listenForReply(0x4c);
@@ -243,19 +243,19 @@ public:
         sendPacket(0x16);
     }
 
-    uint16_t getStatus()
+    int16_t getStatus()
     {
         sendPacket(0x42);
         return listenForReply(0x42);
     }
 
-    uint16_t getFolderTrackCount(uint16_t folder)
+    int16_t getFolderTrackCount(uint16_t folder)
     {
         sendPacket(0x4e, folder);
         return listenForReply(0x4e);
     }
 
-    uint16_t getTotalTrackCount()
+    int16_t getTotalTrackCount()
     {
         sendPacket(0x48);
         return listenForReply(0x48);
@@ -326,7 +326,7 @@ private:
         _lastSend = millis();
     }
 
-    bool readPacket(uint8_t* command, uint16_t* argument)
+    bool readPacket(uint8_t* command, int16_t* argument)
     {
         uint8_t in[DfMp3_Packet_SIZE] = { 0 };
         uint8_t read;
@@ -374,7 +374,7 @@ private:
         return true;
     }
 
-    uint16_t listenForReply(uint8_t command)
+    int16_t listenForReply(uint8_t command)
     {
         uint8_t replyCommand = 0;
         uint16_t replyArg = 0;
@@ -434,13 +434,13 @@ private:
                     T_NOTIFICATION_METHOD::OnError(DfMp3_Error_General);
                     if (_serial.available() == 0)
                     {
-                        return 0;
+                        return -1;
                     }
                 }
             }
         } while (command != 0);
 
-        return 0;
+        return -1;
     }
 
     uint16_t calcChecksum(uint8_t* packet)
