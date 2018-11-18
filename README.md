@@ -20,7 +20,7 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * 2200mAh Powerbank
 * Göldo Dome Chrome (KB02C)
 * Skrews, nuts, washers, resistors, pots, switch, hot glue...
-* Libraries: SoftSerial, [DFRobotDFPlayerMini](https://github.com/DFRobot/DFRobotDFPlayerMini) (1.0.3 - 1.0.5 are proven to work)
+* Libraries: SoftSerial
 
 ## Usage Instructions
 * Push playlist button 1-11 to start playing the corresponding playlist. Push button again to move on to the next track within that playlist.
