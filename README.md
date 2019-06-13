@@ -4,11 +4,13 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 ![](assets/14box1.png)
 
 ## Features
-* Up to 32 GB audio playback (MP3, WAV, WMA) in 11 play lists
+* Up to 32 GB audio playback (MP3, WAV, WMA) in 11 play lists (10 if "previous" button is enabled)
 * 50+h continuous playback (medium volume)
 * Sleep timer (5 - 50 minutes) with fade out
 * Parental maximum volume control
-* Configurable: Continuous play ON/OFF, play list loop ON/OFF, automatic restart of last active track on startup ON/OFF
+* Configurable: Continuous play ON/OFF, play list loop ON/OFF, automatic restart of last active track on startup ON/OFF, repeat1
+* (optional) Pause playback on minimum volume (search for PAUSE_ON_MIN_VOLUME in KidsMP3Player.ino)
+* (optional) Use button 11 as "previous" (search for USE_PREVIOUS_BUTTON in KidsMP3Player.ino)
 
 ## Build Ingredients
 * IKEA Bamboo box DRAGAN as body
@@ -27,6 +29,7 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 * Hold down button 1 for more than 2 secs to toggle between "Continuous Play ON/OFF".
 * Hold down button 2 for more than 2 secs to toggle between "Playlist loop ON/OFF" (only applicable if "Continuous Play" is ON). 
 * Hold down button 3 for more than 2 secs to toggle between "Restart last active track on startup ON/OFF". 
+* Hold down button 4 for more than 2 secs to toggle between "Repeat1 ON/OFF". 
 * Hold down button 11 for more than 2 secs to activate Sleep Timer. Afterwards push button 1 to 11 to choose between OFF and 5 to 50 minutes sleep timer. Device will fade out volume after sleep timer has run out. When device has gone to sleep you need to switch it off and on again to continue playing.
 * Use internal volume pot to set maximum volume of normal volume pot.
 * [User Manual German](assets/Manual%20German.pdf)
@@ -66,6 +69,8 @@ MP3 player for kids based on DFPlayer mini and ATTiny
     0301.mp3 - Audio file "Playlist Loop OFF"
     0400.mp3 - Audio file "Restart last active track on startup ON"
     0401.mp3 - Audio file "Restart last active track on startup OFF"
+    0500.mp3 - Audio file "Repeat one track ON"
+    0501.mp3 - Audio file "Repeat one track OFF"
 /MP3
     [Copy same content as in /ADVERT here]
 ```
