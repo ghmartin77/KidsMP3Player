@@ -18,9 +18,19 @@
 #define PIN_VOLUME A2
 #define PIN_VOLUME_INTERNAL A1
 
+// Uncomment to use button 11 as button "previous"
+// #define USE_PREVIOUS_BUTTON
+
+// Uncomment to make player pause playback on minimum volume
+// #define PAUSE_ON_MIN_VOLUME
+
 #define NO_FOLDERS 11
+#ifdef USE_PREVIOUS_BUTTON
+#define NO_FOLDERS 10
+#endif
 
 void playFolderOrNextInFolder(int folder, boolean loop);
+void repeatCurrentOrPlayPreviousInCurFolder();
 void writeTrackInfo(int16_t folder, int16_t track);
 
 SoftwareSerial softSerial(0, 1); // RX, TX
@@ -32,6 +42,8 @@ enum {
 boolean loopPlaylist = false;
 boolean continuousPlayWithinPlaylist = false;
 boolean restartLastTrackOnStart = false;
+boolean repeat1 = false;
+boolean paused = false;
 
 float volFade = 1.0;
 int vol = -1;
@@ -41,6 +53,7 @@ unsigned long volumeHandledLastMs = 0L;
 
 unsigned long sleepAtMs = 0L;
 unsigned long offAtMs = 0L;
+unsigned long trackPlaybackStartedAtMs = 0L;
 
 unsigned long nowMs;
 
@@ -63,8 +76,13 @@ class Mp3Notify
       if (expectedGlobalTrackToFinish == globalTrack) {
         expectedGlobalTrackToFinish = -1;
 
-        if (continuousPlayWithinPlaylist && startTrackAtMs == 0 /* no user request pending */) {
-          playFolderOrNextInFolder(curFolder, loopPlaylist);
+        if (startTrackAtMs == 0 /* no user request pending */) {
+          if (repeat1) {
+            startTrackAtMs = millis() + PLAY_DELAY_MS;
+          }
+          else if (continuousPlayWithinPlaylist) {
+            playFolderOrNextInFolder(curFolder, loopPlaylist);
+          }
         }
 
         if (restartLastTrackOnStart && (curTrack == -1 || !continuousPlayWithinPlaylist)) {
@@ -121,6 +139,7 @@ void readConfig() {
   loopPlaylist = cfg & 1;
   continuousPlayWithinPlaylist = cfg & 2;
   restartLastTrackOnStart = cfg & 4;
+  repeat1 = cfg & 8;
 }
 
 void writeConfig() {
@@ -129,6 +148,7 @@ void writeConfig() {
   cfg = (cfg & (0xff ^ 1)) | (loopPlaylist ? 1 : 0);
   cfg = (cfg & (0xff ^ 2)) | (continuousPlayWithinPlaylist ? 2 : 0);
   cfg = (cfg & (0xff ^ 4)) | (restartLastTrackOnStart ? 4 : 0);
+  cfg = (cfg & (0xff ^ 8)) | (repeat1 ? 8 : 0);
 
   eeprom_update_byte((uint8_t*) EEPROM_CFG, cfg);
 }
@@ -187,6 +207,24 @@ void playFolderOrNextInFolder(int folder, boolean loop = true) {
   startTrackAtMs = millis() + PLAY_DELAY_MS;
 }
 
+void repeatCurrentOrPlayPreviousInCurFolder() {
+  if (curFolder == -1 || curTrack == -1) {
+    return;
+  }
+
+  startTrackAtMs = 0;
+
+  if (trackPlaybackStartedAtMs == 0 || millis() < trackPlaybackStartedAtMs + 3000) {
+    if (--curTrack <= 0) {
+      curTrack = maxTracks[curFolder - 1];
+    }
+  }
+
+  trackPlaybackStartedAtMs = 0;
+  startTrackAtMs = millis() + PLAY_DELAY_MS;
+}
+
+
 void setup() {
   pinMode(PIN_VOLUME, INPUT);
   pinMode(PIN_VOLUME_INTERNAL, INPUT);
@@ -233,6 +271,17 @@ inline void handleVolume() {
     if (volNew != vol) {
       vol = volNew;
       player.setVolume(vol);
+
+#ifdef PAUSE_ON_MIN_VOLUME
+      if (vol == 1 && !paused) {
+        paused = true;
+        player.pause();
+      }
+      if (vol > 1 && paused) {
+        paused = false;
+        player.start();
+      }
+#endif
     }
   }
 }
@@ -263,7 +312,18 @@ inline void handleKeyPress() {
           writeConfig();
           writeTrackInfo(restartLastTrackOnStart ? curFolder : -1, restartLastTrackOnStart ? curTrack : -1);
           delay(1000);
+        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 4) {
+          repeat1 = !repeat1;
+          playOrAdvertise(loopPlaylist ? 500 : 501);
+          writeConfig();
+          delay(1000);
         } else {
+#ifdef USE_PREVIOUS_BUTTON
+          if (key == 11) {
+            repeatCurrentOrPlayPreviousInCurFolder();
+          }
+          else
+#endif
           playFolderOrNextInFolder(key);
         }
         break;
@@ -325,10 +385,13 @@ void loop() {
 
   handleSleepTimer();
   handleVolume();
-  handleKeyPress();
+  if (!paused) {
+    handleKeyPress();
+  }
 
   if (startTrackAtMs != 0 and nowMs >= startTrackAtMs) {
     startTrackAtMs = 0;
+    trackPlaybackStartedAtMs = nowMs;
     player.playFolderTrack(curFolder, curTrack);
     if (restartLastTrackOnStart) {
       writeTrackInfo(curFolder, curTrack);
