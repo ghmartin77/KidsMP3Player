@@ -314,7 +314,7 @@ inline void handleKeyPress() {
           delay(1000);
         } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 4) {
           repeat1 = !repeat1;
-          playOrAdvertise(loopPlaylist ? 500 : 501);
+          playOrAdvertise(repeat1 ? 500 : 501);
           writeConfig();
           delay(1000);
         } else {
