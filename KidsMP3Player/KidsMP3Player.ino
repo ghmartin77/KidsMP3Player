@@ -2,11 +2,15 @@
 #include <SoftwareSerial.h>
 #include <avr/sleep.h>
 #include <avr/eeprom.h>
+// #define DEBUG_DFPLAYER_COMMUNICATION
 #include "DFMiniMp3.h"
 
 #define EEPROM_CFG 1
 #define EEPROM_FOLDER 2
 #define EEPROM_TRACK 4
+#define EEPROM_INIT_MAGIC 8
+
+#define MAGIC_MARKER 0xCAFE
 
 #define BUTTON_TOLERANCE 25
 #define LONG_KEY_PRESS_TIME_MS 2000L
@@ -24,14 +28,22 @@
 // Uncomment to make player pause playback on minimum volume
 // #define PAUSE_ON_MIN_VOLUME
 
+// Comment if compiler complains about too big binary
+#define INIT_CONFIG_ON_FIRST_START
+
 #define NO_FOLDERS 11
 #ifdef USE_PREVIOUS_BUTTON
 #define NO_FOLDERS 10
 #endif
 
+class Mp3Notify;
+
+void initDFPlayer();
 void playFolderOrNextInFolder(int folder, boolean loop);
 void repeatCurrentOrPlayPreviousInCurFolder();
 void writeTrackInfo(int16_t folder, int16_t track);
+void readFolderTrackCounts();
+boolean isPlaying();
 
 SoftwareSerial softSerial(0, 1); // RX, TX
 
@@ -39,11 +51,17 @@ enum {
   MODE_NORMAL, MODE_SET_TIMER
 } mode = MODE_NORMAL;
 
+boolean continuousPlayWithinPlaylist = true;
 boolean loopPlaylist = false;
-boolean continuousPlayWithinPlaylist = false;
-boolean restartLastTrackOnStart = false;
+boolean restartLastTrackOnStart = true;
 boolean repeat1 = false;
+
+boolean* config[] {&continuousPlayWithinPlaylist, &loopPlaylist, &restartLastTrackOnStart, &repeat1};
+
 boolean paused = false;
+boolean volatile error = false;
+boolean sdAvailable = false;
+boolean usbAvailable = false;
 
 float volFade = 1.0;
 int vol = -1;
@@ -66,10 +84,13 @@ unsigned long startTrackAtMs = 0L;
 
 int maxTracks[NO_FOLDERS];
 
+DFMiniMp3<SoftwareSerial, Mp3Notify> player(softSerial);
+
 class Mp3Notify
 {
   public:
     static void OnError(uint16_t errorCode) {
+      error = true;
     }
 
     static void OnPlayFinished(uint16_t globalTrack) {
@@ -92,16 +113,37 @@ class Mp3Notify
     }
 
     static void OnCardOnline(uint16_t code) {
+      sdAvailable = true;
     }
 
     static void OnCardInserted(uint16_t code) {
+      player.setPlaybackSource(DfMp3_PlaySource_Sd);
+      readFolderTrackCounts();
     }
 
     static void OnCardRemoved(uint16_t code) {
+      if (!isPlaying()) {
+        player.setPlaybackSource(DfMp3_PlaySource_Usb);
+        readFolderTrackCounts();
+      }
+    }
+
+    static void OnUsbOnline(uint16_t code) {
+      usbAvailable = true;
+    }
+
+    static void OnUsbInserted(uint16_t code) {
+      player.setPlaybackSource(DfMp3_PlaySource_Usb);
+      readFolderTrackCounts();
+    }
+
+    static void OnUsbRemoved(uint16_t code) {
+      if (!isPlaying()) {
+        player.setPlaybackSource(DfMp3_PlaySource_Sd);
+        readFolderTrackCounts();
+      }
     }
 };
-
-DFMiniMp3<SoftwareSerial, Mp3Notify> player(softSerial);
 
 void turnOff() {
   volFade = 0.0;
@@ -111,7 +153,7 @@ void turnOff() {
   delay(50);
   player.setPlaybackSource(DfMp3_PlaySource_Sleep);
   delay(50);
-  player.disableDAC();
+  player.disableDac();
   delay(50);
   player.sleep();
   delay(200);
@@ -123,13 +165,19 @@ void turnOff() {
   }
 }
 
-void initDFPlayer(boolean reset = false) {
+void initDFPlayer() {
   delay(100);
   player.setEq(DfMp3_Eq_Normal);
   delay(100);
-  player.setPlaybackSource(DfMp3_PlaySource_Sd);
+
+  if (usbAvailable) {
+    player.setPlaybackSource(DfMp3_PlaySource_Usb);
+  } else {
+    player.setPlaybackSource(DfMp3_PlaySource_Sd);
+  }
   delay(250);
-  player.enableDAC();
+
+  player.enableDac();
   delay(250);
 }
 
@@ -174,9 +222,26 @@ void writeTrackInfo(int16_t folder, int16_t track) {
   eeprom_update_word((uint16_t*) EEPROM_TRACK, (uint16_t) track);
 }
 
+boolean isPlaying() {
+  uint16_t state = 0;
+  int retries = 3;
+
+  error = true;
+  while (retries > 0 && error) {
+    --retries;
+    error = false;
+    state = player.getStatus();
+    if (error) {
+      delay(100);
+    }
+  }
+  error = false;
+
+  return (state & 1) == 1;
+}
+
 void playOrAdvertise(int fileNo) {
-  int state = player.getStatus();
-  if ((state & 1) == 1) {
+  if (isPlaying()) {
     player.playAdvertisement(fileNo);
   } else {
     player.playMp3FolderTrack(fileNo);
@@ -224,24 +289,64 @@ void repeatCurrentOrPlayPreviousInCurFolder() {
   startTrackAtMs = millis() + PLAY_DELAY_MS;
 }
 
-
-void setup() {
-  pinMode(PIN_VOLUME, INPUT);
-  pinMode(PIN_VOLUME_INTERNAL, INPUT);
-  pinMode(PIN_KEY, INPUT_PULLUP);
-
-  readConfig();
-
-  delay(50);
-
-  player.begin();
-
-  initDFPlayer();
+void readFolderTrackCounts() {
+  delay(2000);
 
   for (int i = 0; i < NO_FOLDERS; ++i) {
     maxTracks[i] = player.getFolderTrackCount(i + 1);
     if (maxTracks[i] == -1) i--;
   }
+
+  curFolder = -1;
+  curTrack = -1;
+}
+
+#ifdef INIT_CONFIG_ON_FIRST_START
+void initConfigOnFirstStart() {
+  uint16_t magic = eeprom_read_word((uint16_t*) EEPROM_INIT_MAGIC);
+
+  if (magic != MAGIC_MARKER) {
+    eeprom_update_word((uint16_t*) EEPROM_INIT_MAGIC, MAGIC_MARKER);
+    writeConfig();
+    writeTrackInfo(-1, -1);
+  }
+}
+#endif
+
+void setup() {
+  player.begin();
+
+  pinMode(PIN_VOLUME, INPUT);
+  pinMode(PIN_VOLUME_INTERNAL, INPUT);
+  pinMode(PIN_KEY, INPUT_PULLUP);
+
+#ifdef INIT_CONFIG_ON_FIRST_START
+  initConfigOnFirstStart();
+#endif
+  readConfig();
+
+  delay(1500);
+
+  error = false;
+  uint8_t storageDevices = player.queryStorageDevices();
+  if (error) {
+    error = false;
+    if (!sdAvailable && !usbAvailable) {
+      player.reset();
+      for (int i = 0; i < 30; ++i) {
+        player.loop();
+        delay(50);
+      }
+    }
+  }
+  else {
+    usbAvailable = storageDevices & 0x01;
+    sdAvailable = storageDevices & 0x02;
+  }
+
+  initDFPlayer();
+
+  readFolderTrackCounts();
 
   if (restartLastTrackOnStart) {
     readTrackInfo();
@@ -296,26 +401,13 @@ inline void handleKeyPress() {
           mode = MODE_SET_TIMER;
           playOrAdvertise(100);
           delay(1000);
-        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 1) {
-          continuousPlayWithinPlaylist = !continuousPlayWithinPlaylist;
-          playOrAdvertise(continuousPlayWithinPlaylist ? 200 : 201);
+        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key >= 1 && key <= 4) {
+          *config[key-1] = !*config[key-1];
+          playOrAdvertise(*config[key-1] ? (key + 1) * 100 : (key + 1) * 100 + 1);
           writeConfig();
-          delay(1000);
-        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 2) {
-          loopPlaylist = !loopPlaylist;
-          playOrAdvertise(loopPlaylist ? 300 : 301);
-          writeConfig();
-          delay(1000);
-        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 3) {
-          restartLastTrackOnStart = !restartLastTrackOnStart;
-          playOrAdvertise(restartLastTrackOnStart ? 400 : 401);
-          writeConfig();
-          writeTrackInfo(restartLastTrackOnStart ? curFolder : -1, restartLastTrackOnStart ? curTrack : -1);
-          delay(1000);
-        } else if (nowMs - keyPressTimeMs >= LONG_KEY_PRESS_TIME_MS && key == 4) {
-          repeat1 = !repeat1;
-          playOrAdvertise(repeat1 ? 500 : 501);
-          writeConfig();
+          if (key == 3) {
+            writeTrackInfo(restartLastTrackOnStart ? curFolder : -1, restartLastTrackOnStart ? curTrack : -1);
+          }
           delay(1000);
         } else {
 #ifdef USE_PREVIOUS_BUTTON
@@ -324,7 +416,7 @@ inline void handleKeyPress() {
           }
           else
 #endif
-          playFolderOrNextInFolder(key);
+            playFolderOrNextInFolder(key);
         }
         break;
 
