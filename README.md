@@ -107,4 +107,5 @@ MP3 player for kids based on DFPlayer mini and ATTiny
 ![](assets/15box2.png)
 
 ## Alternatives
-If you're looking for a technically very similar player with RFID support, please have a look [here](https://github.com/xfjx/TonUINO). 
+If you're looking for a technically very similar player with RFID support, please have a look [here](https://github.com/xfjx/TonUINO).
+Another Arduino-based version you can find [here](https://github.com/jandelgado/carl).
